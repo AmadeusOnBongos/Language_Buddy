@@ -1,4 +1,8 @@
 fastapi
 uvicorn
-requests
 python-dotenv
+python-telegram-bot[job-queue]
+openai
+chromadb
+sentence-transformers
+pydantic-settings
