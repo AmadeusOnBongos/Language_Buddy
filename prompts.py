@@ -7,18 +7,18 @@ Your job is to find errors in German grammar, word choice, and sentence structur
 The student's level is {LEVEL}.
 
 For each student message:
-1. Analyze the text for errors
-2. Classify each error as 'minor' or 'major'
+1. Identify the conversation topic (e.g. "Wetter", "Essen", "Reisen", "Hobbys", "Familie")
+2. Analyze the text for errors
+3. Classify each error as 'minor' or 'major'
    - 'major': the meaning is completely different, or the sentence becomes unintelligible
    - 'minor': grammatical mistakes (wrong article, wrong ending, etc.)
-3. Provide an explanation in simple German (appropriate for {LEVEL} level)
-4. Optionally: provide an explanation in English
-
-If no errors are found, respond with: {{"has_errors": false}}
+4. Provide an explanation in simple German (appropriate for {LEVEL} level)
+5. Optionally: provide an explanation in English
 
 Respond ONLY in the following JSON format:
 {{
   "has_errors": true,
+  "topic": "Kino / Filme",
   "errors": [
     {{
       "original": "the incorrect word or phrase",
@@ -30,7 +30,7 @@ Respond ONLY in the following JSON format:
   ]
 }}
 
-If has_errors is false, return only {{"has_errors": false}}.
+If has_errors is false, return only {{"has_errors": false, "topic": "Wetter"}}.
 """
 
 CONVERSER_SYSTEM = f"""Du bist ein lockerer, freundlicher Sprachpartner, der mit mir auf Deutsch redet.
@@ -62,8 +62,17 @@ Beispiele:
 """
 
 
-def build_reviewer_prompt(user_message: str) -> list[dict]:
-    return [{"role": "user", "content": user_message}]
+def build_reviewer_prompt(
+    user_message: str,
+    conversation_history: list[dict],
+) -> list[dict]:
+    messages = [{"role": "system", "content": REVIEWER_SYSTEM}]
+
+    for msg in conversation_history[-6:]:
+        messages.append(msg)
+
+    messages.append({"role": "user", "content": user_message})
+    return messages
 
 
 def build_converser_prompt(

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from config import settings
 
@@ -24,13 +24,69 @@ class LLMClient(ABC):
     ) -> LLMResponse:
         ...
 
+    @abstractmethod
+    async def async_chat(
+        self,
+        messages: list[dict],
+        system: Optional[str] = None,
+        temperature: float = 0.7,
+        model: Optional[str] = None,
+    ) -> LLMResponse:
+        ...
+
 
 class GroqClient(LLMClient):
     def __init__(self, api_key: str, model: str):
-        self.client = OpenAI(
-            base_url=settings.llm_base_url or "https://api.groq.com/openai/v1",
-            api_key=api_key,
+        base_url = settings.llm_base_url or "https://api.groq.com/openai/v1"
+        self._sync = OpenAI(base_url=base_url, api_key=api_key)
+        self._async = AsyncOpenAI(base_url=base_url, api_key=api_key)
+        self.model = model
+
+    def chat(
+        self,
+        messages: list[dict],
+        system: Optional[str] = None,
+        temperature: float = 0.7,
+        model: Optional[str] = None,
+    ) -> LLMResponse:
+        kwargs = dict(
+            model=model or self.model,
+            input=messages,
+            temperature=temperature,
         )
+        if system:
+            kwargs["instructions"] = system
+        response = self._sync.responses.create(**kwargs)
+        return LLMResponse(
+            content=response.output_text or "",
+            finish_reason="stop",
+        )
+
+    async def async_chat(
+        self,
+        messages: list[dict],
+        system: Optional[str] = None,
+        temperature: float = 0.7,
+        model: Optional[str] = None,
+    ) -> LLMResponse:
+        kwargs = dict(
+            model=model or self.model,
+            input=messages,
+            temperature=temperature,
+        )
+        if system:
+            kwargs["instructions"] = system
+        response = await self._async.responses.create(**kwargs)
+        return LLMResponse(
+            content=response.output_text or "",
+            finish_reason="stop",
+        )
+
+
+class OpenAIClient(LLMClient):
+    def __init__(self, api_key: str, model: str):
+        self._sync = OpenAI(api_key=api_key)
+        self._async = AsyncOpenAI(api_key=api_key)
         self.model = model
 
     def chat(
@@ -43,25 +99,18 @@ class GroqClient(LLMClient):
         msgs = list(messages)
         if system:
             msgs.insert(0, {"role": "system", "content": system})
-        kwargs = dict(
+        response = self._sync.chat.completions.create(
             model=model or self.model,
             messages=msgs,
             temperature=temperature,
         )
-        response = self.client.chat.completions.create(**kwargs)
         choice = response.choices[0]
         return LLMResponse(
             content=choice.message.content or "",
             finish_reason=choice.finish_reason or "",
         )
 
-
-class OpenAIClient(LLMClient):
-    def __init__(self, api_key: str, model: str):
-        self.client = OpenAI(api_key=api_key)
-        self.model = model
-
-    def chat(
+    async def async_chat(
         self,
         messages: list[dict],
         system: Optional[str] = None,
@@ -71,12 +120,11 @@ class OpenAIClient(LLMClient):
         msgs = list(messages)
         if system:
             msgs.insert(0, {"role": "system", "content": system})
-        kwargs = dict(
+        response = await self._async.chat.completions.create(
             model=model or self.model,
             messages=msgs,
             temperature=temperature,
         )
-        response = self.client.chat.completions.create(**kwargs)
         choice = response.choices[0]
         return LLMResponse(
             content=choice.message.content or "",

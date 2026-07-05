@@ -4,5 +4,5 @@ python-dotenv
 python-telegram-bot[job-queue]
 openai
 chromadb
-sentence-transformers
+fastembed
 pydantic-settings

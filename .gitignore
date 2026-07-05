@@ -206,6 +206,9 @@ tempCodeRunnerFile.py
 # ChromaDB persistent data
 chroma_data/
 
+# Logs
+bot.log
+
 # Ruff stuff:
 .ruff_cache/
 

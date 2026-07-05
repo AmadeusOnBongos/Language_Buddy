@@ -7,13 +7,13 @@ class Settings(BaseSettings):
 
     telegram_token: str
     llm_provider: str = "groq"
-    llm_model: str = "gemma2-9b-it"
+    llm_model: str = "llama-3.1-8b-instant"
     llm_api_key: str
     llm_base_url: Optional[str] = "https://api.groq.com/openai/v1"
     german_level: str = "A1-A2"
     rag_top_k: int = 5
     rag_collection_name: str = "conversations"
-    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
     schedule_start_hour: int = 9
     schedule_end_hour: int = 22
     schedule_min_interval_minutes: int = 60

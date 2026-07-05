@@ -1,40 +1,93 @@
-import requests
-import time
-import os
-from dotenv import load_dotenv
+import logging
 
-load_dotenv()
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
+from config import settings
+from conversation import ConversationManager
+from llm_client import get_llm_client
+from memory_store import MemoryStore
 
-def get_updates(offset=None):
-    url = f"{BASE_URL}/getUpdates"
-    params = {"timeout": 100, "offset": offset}
-    return requests.get(url, params=params).json()
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler("bot.log"),
+        logging.StreamHandler(),
+    ],
+)
+logger = logging.getLogger(__name__)
 
-def send_message(chat_id, text):
-    url = f"{BASE_URL}/sendMessage"
-    data = {"chat_id": chat_id, "text": text}
-    requests.post(url, data=data)
+conversation_manager: ConversationManager | None = None
+
+
+async def start(update: Update, _context):
+    if conversation_manager:
+        conversation_manager.clear_history(update.effective_chat.id)
+    await update.message.reply_text(
+        "Hallo! Ich bin dein Sprachbuddy. 👋\n"
+        "Ich helfe dir, Deutsch zu üben. Schreib mir einfach "
+        "eine Nachricht auf Deutsch!"
+    )
+
+
+async def bye(update: Update, _context):
+    if conversation_manager:
+        conversation_manager.clear_history(update.effective_chat.id)
+    await update.message.reply_text(
+        "Tschüss! Es hat Spaß gemacht, mit dir zu reden. 👋\n"
+        "Schreib mir einfach, wenn du wieder üben willst!"
+    )
+
+
+async def handle_message(update: Update, _context):
+    if not update.message or not update.message.text:
+        return
+
+    chat_id = update.effective_chat.id
+    user_message = update.message.text
+
+    try:
+        bot_reply = await conversation_manager.process_message(chat_id, user_message)
+        await update.message.reply_text(bot_reply)
+    except Exception as e:
+        logger.error(f"Error processing message: {e}", exc_info=True)
+        await update.message.reply_text(
+            "Entschuldigung, ich habe einen Fehler gemacht. "
+            "Kannst du das nochmal sagen?"
+        )
+
 
 def main():
-    offset = None
+    global conversation_manager
 
-    while True:
-        updates = get_updates(offset)
+    logger.info("Initializing LLM client...")
+    llm = get_llm_client()
 
-        for update in updates["result"]:
-            offset = update["update_id"] + 1
+    logger.info("Initializing memory store...")
+    memory = MemoryStore()
+    logger.info(f"Memory store ready. Existing entries: {memory.count()}")
 
-            if "message" in update:
-                chat_id = update["message"]["chat"]["id"]
-                text = update["message"].get("text", "")
+    conversation_manager = ConversationManager(llm, memory)
 
-                # Echo response
-                send_message(chat_id, f"Was ist deine Problem?")
+    app = Application.builder().token(settings.telegram_token).build()
 
-        time.sleep(1)
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("bye", bye))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    logger.info(f"Starting bot in {settings.bot_mode} mode...")
+
+    if settings.bot_mode == "webhook":
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=settings.webhook_port,
+            url_path=settings.telegram_token,
+            webhook_url=f"{settings.webhook_url}/{settings.telegram_token}",
+        )
+    else:
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
+
 
 if __name__ == "__main__":
     main()

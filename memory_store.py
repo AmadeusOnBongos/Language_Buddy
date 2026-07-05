@@ -4,14 +4,14 @@ from typing import Optional
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 from config import settings
 
 
 class MemoryStore:
     def __init__(self):
-        self.embedder = SentenceTransformer(settings.embedding_model)
+        self.embedder = TextEmbedding(model_name=settings.embedding_model)
         self.client = chromadb.PersistentClient(
             path="./chroma_data",
             settings=ChromaSettings(anonymized_telemetry=False),
@@ -35,7 +35,7 @@ class MemoryStore:
             "user_message": user_message,
             "bot_response": bot_response,
         }
-        embedding = self.embedder.encode(text).tolist()
+        embedding = list(self.embedder.embed([text]))[0].tolist()
         self.collection.add(
             ids=[entry_id],
             embeddings=[embedding],
@@ -50,7 +50,7 @@ class MemoryStore:
         k: Optional[int] = None,
     ) -> list[dict]:
         k = k or settings.rag_top_k
-        query_embedding = self.embedder.encode(query).tolist()
+        query_embedding = list(self.embedder.embed([query]))[0].tolist()
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=k,
