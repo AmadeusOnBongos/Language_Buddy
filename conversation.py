@@ -4,7 +4,7 @@ import logging
 from config import settings
 from llm_client import LLMClient
 from memory_store import MemoryStore
-from prompts import build_converser_prompt, build_reviewer_prompt
+from prompts import build_converser_prompt, build_reviewer_prompt, build_topic_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +74,22 @@ class ConversationManager:
         self._histories[chat_id] = self._histories[chat_id][-20:]
 
         return bot_reply
+
+    async def generate_topic(self) -> str:
+        recent = self.memory.get_recent_exchanges(limit=10)
+        recent_topics = [
+            e["metadata"].get("topic", "")
+            for e in recent
+            if e.get("metadata")
+        ]
+        recent_topics = [t for t in recent_topics if t]
+
+        topic_prompt = build_topic_prompt(recent_topics)
+        response = await self.llm.async_chat(
+            [{"role": "user", "content": topic_prompt}],
+            temperature=0.8,
+        )
+        return response.content
 
     def clear_history(self, chat_id: int) -> None:
         self._histories.pop(chat_id, None)

@@ -7,6 +7,7 @@ from config import settings
 from conversation import ConversationManager
 from llm_client import get_llm_client
 from memory_store import MemoryStore
+from scheduler import save_chat_id, setup_scheduler
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -22,12 +23,16 @@ conversation_manager: ConversationManager | None = None
 
 
 async def start(update: Update, _context):
+    chat_id = update.effective_chat.id
+    save_chat_id(chat_id)
     if conversation_manager:
-        conversation_manager.clear_history(update.effective_chat.id)
+        conversation_manager.clear_history(chat_id)
     await update.message.reply_text(
         "Hallo! Ich bin dein Sprachbuddy. 👋\n"
         "Ich helfe dir, Deutsch zu üben. Schreib mir einfach "
-        "eine Nachricht auf Deutsch!"
+        "eine Nachricht auf Deutsch!\n\n"
+        "Ich werde dir auch ab und zu eine Nachricht schreiben, "
+        "damit du üben kannst."
     )
 
 
@@ -71,11 +76,13 @@ def main():
     conversation_manager = ConversationManager(llm, memory)
 
     app = Application.builder().token(settings.telegram_token).build()
+    app.bot_data["conversation_manager"] = conversation_manager
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("bye", bye))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    setup_scheduler(app)
     logger.info(f"Starting bot in {settings.bot_mode} mode...")
 
     if settings.bot_mode == "webhook":

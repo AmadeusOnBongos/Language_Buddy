@@ -209,6 +209,9 @@ chroma_data/
 # Logs
 bot.log
 
+# Runtime data
+chat_id.txt
+
 # Ruff stuff:
 .ruff_cache/
 
