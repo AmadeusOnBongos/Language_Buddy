@@ -1,4 +1,11 @@
 #!/bin/bash
+set -euo pipefail
 cd "$(dirname "$0")"
-source .venv/bin/activate
-python bot.py
+
+if [ ! -x ".venv/bin/python" ]; then
+  echo "ERROR: .venv not found. Create it first:"
+  echo "  python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
+  exit 1
+fi
+
+exec .venv/bin/python bot.py

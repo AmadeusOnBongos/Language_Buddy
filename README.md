@@ -25,12 +25,14 @@ Built as an entry for the Gemma4 hackathon and as a hands-on project for learnin
 3. Install dependencies and start:
 
    ```bash
-   python -m venv venv
-   venv\Scripts\activate        # Windows (PowerShell); on Linux: source venv/bin/activate
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1          # Windows (PowerShell); on Linux: source .venv/bin/activate
    pip install -r requirements.txt
-   cp .env.example .env         # then fill in TELEGRAM_TOKEN and LLM_API_KEY
+   cp .env.example .env                # fill in TELEGRAM_TOKEN and LLM_API_KEY
    python bot.py
    ```
+
+   Or skip the terminal: double-click `run_bot.cmd` on Windows, or run `./run_bot.sh` on Linux. Both launchers use `.venv` and fail with a clear error if it doesn't exist yet.
 
 4. Open your bot in Telegram, send `/start`, and just start typing in German. The bot will occasionally message you on its own, too.
 
@@ -43,7 +45,7 @@ All configuration (LLM model, difficulty level, schedule times/intervals, bot mo
 
 ## Roadmap
 
-- [ ] **Local polish** — scheduler end-to-end verification, minor bug fixes, pinned dependencies
+- [x] **Local polish** — scheduler firing verified in polling mode, bug fixes, pinned dependencies
 - [ ] **Dockerize** — container + compose setup with persistent storage
 - [ ] **Deploy** — VPS + Docker + HTTPS webhook (Caddy), provider-agnostic so anyone can self-host
 - [ ] **Future ideas** — practice streaks, a `/stop` quiet mode, and a small stats site

@@ -23,11 +23,11 @@ Origin/purpose: built for the Gemma4 hackathon; also a vehicle to learn LLMs, RA
 - Config via pydantic-settings from `.env` (`config.py`).
 - Scheduler (`scheduler.py`): persists `chat_id` on `/start`; uses `Application.job_queue` to fire a random-interval proactive message (60–240 min), only inside the waking-hours window; generates topics via `ConversationManager.generate_topic()` (avoids repeating recent topics); reschedules itself.
 - Webhook + polling modes both wired (`BOT_MODE`), webhook path uses the bot token as a secret.
+- Phase 1 tidy-up (done): `get_recent_exchanges()` ordering fixed (fetch all → sort by timestamp → slice); `TIMEZONE` setting added (default `Europe/Berlin`, scheduler uses `ZoneInfo` + testable `is_waking_hours()`); `main.py` deleted; `run_bot.sh` fixed (`.venv`, strict mode, `exec`); `run_bot.ps1` + `run_bot.cmd` (double-click launcher for Windows) added; `requirements.txt` pinned; local `.venv` rebuilt; clean boot + scheduler firing verified in polling mode.
 
 ### Not done / planned (see roadmap at bottom)
 - Deployment is **not** done. The owner's chosen path: **VPS + Docker + webhook behind Caddy (HTTPS)**. Verify locally first, then Dockerize, then add domain/HTTPS, then deploy. Keep everything provider-agnostic so other people can self-host too.
-- Target timezone for the schedule: **Europe/Berlin** (see gotchas — the code currently uses server-local time).
-- `main.py` (FastAPI scaffold) is **deprecated** and slated for deletion — it was only a scratch experiment.
+- Full scheduler loop (real topic *delivered* to the phone after `/start`) still needs a manual phone test — only the no-`chat_id` firing path has been verified in logs.
 - No tests, no lint/typecheck config in the repo yet.
 
 ## Architecture / key files
@@ -41,48 +41,49 @@ Origin/purpose: built for the Gemma4 hackathon; also a vehicle to learn LLMs, RA
 | `memory_store.py` | `MemoryStore`: ChromaDB collection + embedding; `add_exchange`, `search_similar`, `get_recent_exchanges`, `count`. |
 | `prompts.py` | `REVIEWER_SYSTEM`, `CONVERSER_SYSTEM`, `TOPIC_GENERATOR` + prompt builders. |
 | `config.py` | `Settings` (pydantic-settings), reads `.env`. |
-| `main.py` | **Deprecated** FastAPI scaffold (scrap). Delete it. |
 | `dummy.py` | Scratch script for testing the Groq API directly. Not part of the app. |
-| `run_bot.sh` | Bash launcher — **buggy**: references `.venv`, repo uses `venv/`. Fix or replace. |
+| `run_bot.sh` | Linux launcher (`exec .venv/bin/python bot.py`). Fails fast with a clear error if `.venv` is missing. |
+| `run_bot.ps1` | Windows launcher (same idea, via `.venv\Scripts\python.exe`). |
+| `run_bot.cmd` | Double-clickable trampoline for Windows: calls `run_bot.ps1` with `-ExecutionPolicy Bypass`, pauses on failure so the window doesn't vanish. |
 | `.env.example` | Template for config (copy to `.env`). |
 
 ## Running locally
 
 ```bash
-python -m venv venv
-venv\Scripts\activate            # Windows (PowerShell); on Linux: source venv/bin/activate
+python -m venv .venv
+.venv\Scripts\Activate.ps1          # Windows (PowerShell); on Linux: source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env             # fill in TELEGRAM_TOKEN and LLM_API_KEY
-python bot.py                    # starts in polling mode by default
+cp .env.example .env                # fill in TELEGRAM_TOKEN and LLM_API_KEY
+python bot.py                       # starts in polling mode by default
 ```
 
-> **Watch out:** the committed `venv/` is currently **stale** — it only has `fastapi`, `uvicorn`, `pydantic` installed. The bot's real deps (`python-telegram-bot`, `openai`, `chromadb`, `fastembed`) are missing; `python bot.py` will fail until `pip install -r requirements.txt` is run.
+Or skip the terminal: double-click `run_bot.cmd` on Windows, or run `./run_bot.sh` on Linux. Both launchers use `.venv` and fail with a clear error if it doesn't exist yet.
 
-Environment: Windows dev machine, **Python 3.10** (so the code's `int | None` / `str | None` syntax is fine, but ≥3.10 is required). `requirements.txt` is **unpinned** — pin it before deploying.
+Environment: Windows dev machine + a Linux Mint laptop, **Python 3.10** (so the code's `int | None` / `str | None` syntax is fine, but ≥3.10 is required). Venv folder is standardized to **`.venv`** on all machines (both `venv/` and `.venv` are gitignored). `requirements.txt` is **pinned** (`==` versions, verified working together).
 
 ## Config (`config.py` / `.env`)
 
-Key vars (full list in `.env.example` / `config.py`): `TELEGRAM_TOKEN`, `LLM_PROVIDER` (groq/openai), `LLM_MODEL` (default `llama-3.1-8b-instant`), `LLM_API_KEY`, `LLM_BASE_URL`, `GERMAN_LEVEL` (A1-A2), `RAG_*`, `EMBEDDING_MODEL`, `SCHEDULE_START_HOUR`/`SCHEDULE_END_HOUR`/`SCHEDULE_MIN/MAX_INTERVAL_MINUTES`, `BOT_MODE` (polling/webhook), `WEBHOOK_URL`/`WEBHOOK_PORT`, `REVIEWER_*`/`CONVERSER_TEMPERATURE`.
+Key vars (full list in `.env.example` / `config.py`): `TELEGRAM_TOKEN`, `LLM_PROVIDER` (groq/openai), `LLM_MODEL` (default `llama-3.1-8b-instant`), `LLM_API_KEY`, `LLM_BASE_URL`, `GERMAN_LEVEL` (A1-A2), `TIMEZONE` (default `Europe/Berlin`), `RAG_*`, `EMBEDDING_MODEL`, `SCHEDULE_START_HOUR`/`SCHEDULE_END_HOUR`/`SCHEDULE_MIN/MAX_INTERVAL_MINUTES`, `BOT_MODE` (polling/webhook), `WEBHOOK_URL`/`WEBHOOK_PORT`, `REVIEWER_*`/`CONVERSER_TEMPERATURE`.
 
 ## Conventions
 
 - Python 3.10+, plain modules (no package layout), stdlib + the deps in `requirements.txt`.
 - Keep code comment-light, match existing style.
-- Never commit secrets: `.env`, `chroma_data/`, `chat_id.txt`, `bot.log`, `venv/` are gitignored.
+- Never commit secrets: `.env`, `chroma_data/`, `chat_id.txt`, `bot.log`, `.venv/` are gitignored.
 - Preserve provider-agnosticism in any deploy artifacts (Docker, docs) so others can self-host on any VPS/Docker host.
 - No test/lint/typecheck setup exists yet — don't invent one without asking the owner first. Run the bot manually to verify behavior (`python bot.py`, then talk to it in Telegram).
 
 ## Gotchas / watch-outs
 
-- `memory_store.get_recent_exchanges()` (`memory_store.py`) sorts **after** `collection.get(limit=...)`, so it is **not** actually "most recent" — order is unreliable. Known bug; fix is planned.
-- The scheduler's waking-hours check uses server-local `datetime.now()` — deployed timezone must be set (owner wants **Europe/Berlin**), e.g. via `TZ` env / container config. `SCHEDULE_*` currently has no timezone handling.
+- The scheduler's waking-hours check uses `ZoneInfo(settings.timezone)` (default `Europe/Berlin`). When deploying, make sure `TIMEZONE` matches the owner's wall clock — log timestamps themselves are still server-local.
+- httpx logs full Telegram API URLs **including the bot token** into `bot.log` at INFO level. `bot.log` is gitignored, but never paste log excerpts publicly without redacting the token.
 - `GroqClient` uses OpenAI's newer **`responses` API** (`input=` / `instructions=` kwargs), not `chat.completions`. Only `OpenAIClient` uses `chat.completions`. Don't "fix" one to look like the other unless intentional.
 - Default model `llama-3.1-8b-instant` is older; Groq may retire/rename models. If it 404s, update `LLM_MODEL`.
 - In-memory conversation history is lost on restart (kept per-process only); ChromaDB persists exchanges across restarts, but RAG is enabled by default while a chat is empty.
 - The embedding model is English-focused (`bge-small-en`) but the content is largely German — quality limitation, acceptable for now.
 - Webhook mode needs a real HTTPS endpoint (Telegram requires it). The reverse proxy must be added — this is the planned Caddy step.
 - Proactive messages use a single `chat_id.txt` (personal-scale feature, one chat at a time).
-- Windows dev shell is PowerShell; `run_bot.sh` (bash) is stale/broken as noted.
+- Windows dev shell is PowerShell (`run_bot.cmd` double-click); `run_bot.sh` is for the Linux Mint laptop.
 
 ## Documentation maintenance rules — IMPORTANT
 
@@ -91,7 +92,7 @@ Key vars (full list in `.env.example` / `config.py`): `TELEGRAM_TOKEN`, `LLM_PRO
 
 ## Roadmap (incremental)
 
-1. **Verify locally & tidy** — test scheduler end-to-end in polling mode; fix `get_recent_exchanges()` ordering; delete `main.py`; fix/replace `run_bot.sh`; pin `requirements.txt`.
+1. **Verify locally & tidy** — DONE (Phase 1): scheduler firing verified in polling mode; `get_recent_exchanges()` ordering fixed; `main.py` deleted; `run_bot.sh` fixed + `run_bot.ps1`/`.cmd` added; `requirements.txt` pinned. Still open: manual phone test of a real delivered topic after `/start`.
 2. **Dockerize** — `Dockerfile`, `docker-compose.yml` (named volume for `chroma_data/`, `chat_id.txt`, logs), `.dockerignore`; env via `.env`/`.env.example`.
 3. **Webhook + HTTPS** — Caddy reverse proxy: `Caddy (443 public) → bot container (8443 private)`; `BOT_MODE=webhook`, `WEBHOOK_URL=https://<domain>`, `TZ=Europe/Berlin`; register webhook and verify via `getWebhookInfo`.
 4. **Deploy** — provider-agnostic server setup (firewall 22/80/443, SSH keys, clone, `.env`, `docker compose up -d`, logs); full phone-to-bot loop test.

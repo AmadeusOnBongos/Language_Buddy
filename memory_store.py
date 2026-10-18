@@ -67,7 +67,9 @@ class MemoryStore:
         return entries
 
     def get_recent_exchanges(self, limit: int = 10) -> list[dict]:
-        all_data = self.collection.get(limit=limit)
+        # Fetch everything first: collection.get(limit=...) does not guarantee
+        # insertion order, so the limit is applied after sorting by timestamp.
+        all_data = self.collection.get()
         entries = []
         if all_data["ids"]:
             sorted_pairs = sorted(

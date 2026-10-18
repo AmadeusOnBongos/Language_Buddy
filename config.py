@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     schedule_end_hour: int = 22
     schedule_min_interval_minutes: int = 60
     schedule_max_interval_minutes: int = 240
+    timezone: str = "Europe/Berlin"
     bot_mode: str = "polling"
     webhook_url: Optional[str] = None
     webhook_port: int = 8443

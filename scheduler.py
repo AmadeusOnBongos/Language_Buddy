@@ -1,6 +1,7 @@
 import logging
 import random
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from telegram.ext import ContextTypes
 
@@ -8,6 +9,11 @@ from config import settings
 from conversation import ConversationManager
 
 logger = logging.getLogger(__name__)
+
+
+def is_waking_hours(now: datetime | None = None) -> bool:
+    now = now or datetime.now(ZoneInfo(settings.timezone))
+    return settings.schedule_start_hour <= now.hour < settings.schedule_end_hour
 
 
 def load_chat_id() -> int | None:
@@ -37,8 +43,8 @@ async def send_proactive_message(context: ContextTypes.DEFAULT_TYPE):
         logger.warning("No conversation_manager in bot_data")
         return
 
-    now = datetime.now()
-    if not (settings.schedule_start_hour <= now.hour < settings.schedule_end_hour):
+    now = datetime.now(ZoneInfo(settings.timezone))
+    if not is_waking_hours(now):
         logger.info(f"Outside waking hours ({now.hour}), rescheduling in 30min")
         schedule_next(context.application, delay_minutes=30)
         return
