@@ -28,6 +28,7 @@ Origin/purpose: built for the Gemma4 hackathon; also a vehicle to learn LLMs, RA
 ### Not done / planned (see roadmap at bottom)
 - Deployment is **not** done. The owner's chosen path: **VPS + Docker + webhook behind Caddy (HTTPS)**. Verify locally first, then Dockerize, then add domain/HTTPS, then deploy. Keep everything provider-agnostic so other people can self-host too.
 - Full scheduler loop (real topic *delivered* to the phone after `/start`) still needs a manual phone test — only the no-`chat_id` firing path has been verified in logs.
+- Analytics is **designed but not implemented** (Postgres + capture now, Streamlit dashboard after deploy). The reviewer's `errors[]` is currently discarded — that's the main capture gap.
 - No tests, no lint/typecheck config in the repo yet.
 
 ## Architecture / key files
@@ -46,6 +47,7 @@ Origin/purpose: built for the Gemma4 hackathon; also a vehicle to learn LLMs, RA
 | `run_bot.ps1` | Windows launcher (same idea, via `.venv\Scripts\python.exe`). |
 | `run_bot.cmd` | Double-clickable trampoline for Windows: calls `run_bot.ps1` with `-ExecutionPolicy Bypass`, pauses on failure so the window doesn't vanish. |
 | `.env.example` | Template for config (copy to `.env`). |
+| `TIMELINE.md` | Full project history, decisions, phase-by-phase plan, analytics design, consolidated gotchas. Read this after a long break. |
 
 ## Running locally
 
@@ -89,11 +91,13 @@ Key vars (full list in `.env.example` / `config.py`): `TELEGRAM_TOKEN`, `LLM_PRO
 
 1. **Update this `AGENTS.md` file every time a major feature is added or an important bug is fixed.** Keep status, architecture, config, and gotchas accurate. Don't wait for the owner to ask.
 2. **Update `README.md` whenever a MAJOR feature or change is implemented** so the user-facing story stays current. (Minor fixes don't require a README change.)
+3. **Keep `TIMELINE.md` current** — update its status snapshot and roadmap as phases advance. It is the durable project memory across sessions/workstations.
 
-## Roadmap (incremental)
+## Roadmap (incremental) — full detail in `TIMELINE.md`
 
-1. **Verify locally & tidy** — DONE (Phase 1): scheduler firing verified in polling mode; `get_recent_exchanges()` ordering fixed; `main.py` deleted; `run_bot.sh` fixed + `run_bot.ps1`/`.cmd` added; `requirements.txt` pinned. Still open: manual phone test of a real delivered topic after `/start`.
-2. **Dockerize** — `Dockerfile`, `docker-compose.yml` (named volume for `chroma_data/`, `chat_id.txt`, logs), `.dockerignore`; env via `.env`/`.env.example`.
+1. **Verify locally & tidy** — DONE: scheduler firing verified in polling mode; `get_recent_exchanges()` ordering fixed; `main.py` deleted; `run_bot.sh` fixed + `run_bot.ps1`/`.cmd` added; `requirements.txt` pinned. Still open: manual phone test of a real delivered topic after `/start`.
+2. **Postgres + capture + Dockerize** (NEXT) — add analytics capture first (`AnalyticsStore` on psycopg v3, `schema.sql`: sessions/exchanges/errors/proactive_messages, reviewer `category` field), then `Dockerfile`, `docker-compose.yml` (`bot` + `db`, volumes for Postgres/`DATA_DIR`/embedding cache, `TZ=Europe/Berlin`), `.dockerignore`.
 3. **Webhook + HTTPS** — Caddy reverse proxy: `Caddy (443 public) → bot container (8443 private)`; `BOT_MODE=webhook`, `WEBHOOK_URL=https://<domain>`, `TZ=Europe/Berlin`; register webhook and verify via `getWebhookInfo`.
 4. **Deploy** — provider-agnostic server setup (firewall 22/80/443, SSH keys, clone, `.env`, `docker compose up -d`, logs); full phone-to-bot loop test.
-5. **Polish** — README deploy docs, optional Docker healthcheck, future ideas (streak stats, `/stop`-quiet mode, separate stats web app).
+5. **Streamlit dashboard** — read-only Postgres views: activity/streak, session length, topic spread, errors by severity/category, nudge effectiveness.
+6. **Polish** — deploy docs, optional Docker healthcheck, future ideas (streak stats, `/stop`-quiet mode, Chroma → pgvector consolidation).
